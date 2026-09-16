@@ -20,6 +20,7 @@ fi
 
 RE2_VERSION="${RE2_VERSION:-2023-03-01}"
 RE2_STATIC_VERSION="${RE2_STATIC_VERSION:-${RE2_VERSION}-1}"
+RE2_FAMILY="${RE2_FAMILY:-re2}"
 
 CRE2_DIR="$REPO_ROOT/internal/cre2"
 
@@ -35,7 +36,7 @@ esac
 PLATFORM="${1:-$HOST_PLATFORM}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$REPO_ROOT/dist/re2-static}"
 PREFIX="$OUTPUT_ROOT/$PLATFORM"
-ARCHIVE="native-re2-static-${RE2_STATIC_VERSION}-${PLATFORM}.tar.gz"
+ARCHIVE="native-${RE2_FAMILY}-${RE2_STATIC_VERSION}-${PLATFORM}.tar.gz"
 
 if [ "$HOST_PLATFORM" = "unknown" ]; then
   echo "unsupported build host: $(uname -s)/$(uname -m)" >&2
@@ -118,9 +119,9 @@ if [ "$PLATFORM" = "windows_amd64" ]; then
   cp "$CXX_PREFIX/share/licenses/gcc-libs/COPYING.RUNTIME" "$PREFIX/share/licenses/gcc/COPYING.RUNTIME"
 fi
 
-printf '%s' "bundle=${RE2_STATIC_VERSION} platform=${PLATFORM} re2=${RE2_VERSION}" > "$PREFIX/.versions"
+printf '%s' "family=${RE2_FAMILY} version=${RE2_STATIC_VERSION} platform=${PLATFORM} re2=${RE2_VERSION}" > "$PREFIX/.versions"
 cat > "$PREFIX/README.txt" << EOF
-native static RE2 SDK ${RE2_STATIC_VERSION}
+native ${RE2_FAMILY} SDK ${RE2_STATIC_VERSION}
 Target: ${PLATFORM}
 RE2: ${RE2_VERSION} (final release before the Abseil dependency)
 

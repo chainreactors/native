@@ -127,8 +127,8 @@ of the module tree and lets a single SDK serve every downstream project.
 
 #### Installing the SDK
 
-Download `native-re2-static-<RE2_VERSION>-<platform>.tar.gz` and its `.sha256`
-sidecar from the `re2-static-*` release in this repository, verify the
+Download `native-re2-<RE2_STATIC_VERSION>-<os>_<arch>.tar.gz` and its `.sha256`
+sidecar from the `native-re2-*` release in this repository, verify the
 checksum, and extract it. The archive contains `lib/libre2_cre2.a` and the
 upstream RE2 license.
 

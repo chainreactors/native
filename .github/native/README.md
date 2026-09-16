@@ -4,12 +4,15 @@ This repository publishes the prebuilt native artifacts that chainreactors
 projects link or embed. Nothing here is committed to the tree: every artifact
 is built by CI on a matching native runner and attached to a versioned release.
 
-Two SDK families are published:
+Two SDK families are published, and both follow one shape — asset
+`native-<family>-<version>-<os>_<arch>.tar.gz`, tag `native-<family>-<version>`,
+manifest `family=<family> version=<version> platform=<os>_<arch>` plus family
+extras:
 
 | SDK | Asset | Release tag | Built by |
 | --- | --- | --- | --- |
-| static RE2 | `native-re2-static-<version>-<platform>.tar.gz` | `re2-static-<version>` | [`rebuild-static.yml`](../workflows/rebuild-static.yml) |
-| recorder | `aiscan-record-native-<version>-<platform>-<arch>.tar.gz` | `record-native-ffmpeg-…-x264-…` | [`record-native-sdk.yml`](../workflows/record-native-sdk.yml) |
+| static RE2 | `native-re2-<version>-<os>_<arch>.tar.gz` | `native-re2-<version>` | [`rebuild-static.yml`](../workflows/rebuild-static.yml) |
+| recorder | `native-record-<version>-<os>_<arch>.tar.gz` | `native-record-<version>` | [`record-native-sdk.yml`](../workflows/record-native-sdk.yml) |
 
 Both workflows run from this repository and publish with their own
 `GITHUB_TOKEN`; consumers only download. Every archive ships a `.sha256`
@@ -25,7 +28,7 @@ incompatible contents.
 
 `scripts/build-static.sh` compiles the pinned `google/re2` release plus the CRE2
 C wrapper into one `libre2_cre2.a`, then packages it as `dist/re2-static/<platform>/`
-and `native-re2-static-<version>-<platform>.tar.gz`.
+and `native-re2-<version>-<platform>.tar.gz`.
 
 Downstream Go consumers select it with the `re2_cgo re2_static` build tags and
 point CGO at the extracted prefix:

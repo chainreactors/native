@@ -94,6 +94,6 @@ jobs:
           else
             gh release create "${RECORD_NATIVE_RELEASE}" dist/native/* \
               --repo "${GITHUB_REPOSITORY}" \
-              --title "aiscan recorder native SDK ${RECORD_NATIVE_VERSION}" \
-              --notes "Prebuilt static FFmpeg ${FFMPEG_TAG} and x264 ${X264_COMMIT} SDKs for optional aiscan record tool builds."
+              --title "native ${RECORD_FAMILY} SDK ${RECORD_NATIVE_VERSION}" \
+              --notes "Prebuilt static FFmpeg ${FFMPEG_TAG} and x264 ${X264_COMMIT} SDKs for optional record tool builds. Link through the pkg-config files in the archive."
           fi

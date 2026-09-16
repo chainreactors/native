@@ -50,7 +50,7 @@ validate_target() {
 
 native_prefix() {
   local platform="$1" arch="$2"
-  echo "${CYBER_RECORD_PREFIX:-${ROOT}/.cache/record-native/${platform}-${arch}}"
+  echo "${CYBER_RECORD_PREFIX:-${ROOT}/.cache/native/${RECORD_FAMILY}/${platform}_${arch}}"
 }
 
 configure_link_env() {
@@ -140,9 +140,9 @@ verify_ffmpeg() {
 fetch_sdk() {
   local platform="$1" arch="$2" prefix archive base_url expected stamp
   prefix="$(native_prefix "${platform}" "${arch}")"
-  archive="aiscan-record-native-${RECORD_NATIVE_VERSION}-${platform}-${arch}.tar.gz"
+  archive="native-${RECORD_FAMILY}-${RECORD_NATIVE_VERSION}-${platform}_${arch}.tar.gz"
   base_url="${CYBER_RECORD_NATIVE_URL:-https://github.com/${RECORD_NATIVE_REPOSITORY}/releases/download/${RECORD_NATIVE_RELEASE}}"
-  expected="bundle=${RECORD_NATIVE_VERSION} platform=${platform} arch=${arch} ffmpeg=${FFMPEG_COMMIT} x264=${X264_COMMIT}"
+  expected="family=${RECORD_FAMILY} version=${RECORD_NATIVE_VERSION} platform=${platform}_${arch} ffmpeg=${FFMPEG_COMMIT} x264=${X264_COMMIT}"
   stamp="${prefix}/.versions"
 
   if [[ -f "${stamp}" ]] && [[ "$(cat "${stamp}")" == "${expected}" ]]; then
@@ -228,9 +228,9 @@ install_licenses() {
 build_sdk() {
   local platform="$1" arch="$2" prefix source_root stamp expected
   prefix="$(native_prefix "${platform}" "${arch}")"
-  source_root="${CYBER_RECORD_SOURCE:-${ROOT}/.cache/record-native/src}"
+  source_root="${CYBER_RECORD_SOURCE:-${ROOT}/.cache/native/${RECORD_FAMILY}/src}"
   stamp="${prefix}/.versions"
-  expected="source_bundle=${RECORD_NATIVE_VERSION} ffmpeg=${FFMPEG_COMMIT} x264=${X264_COMMIT}"
+  expected="family=${RECORD_FAMILY} version=${RECORD_NATIVE_VERSION} stage=source ffmpeg=${FFMPEG_COMMIT} x264=${X264_COMMIT}"
   if [[ -f "${stamp}" ]] && [[ "$(cat "${stamp}")" == "${expected}" ]]; then
     echo "record native dependencies already built at ${prefix}"
     return
@@ -297,9 +297,9 @@ build_sdk() {
 package_sdk() {
   local platform="$1" arch="$2" output_dir="$3" prefix source_stamp bundle_stamp archive max_bytes
   prefix="$(native_prefix "${platform}" "${arch}")"
-  source_stamp="source_bundle=${RECORD_NATIVE_VERSION} ffmpeg=${FFMPEG_COMMIT} x264=${X264_COMMIT}"
-  bundle_stamp="bundle=${RECORD_NATIVE_VERSION} platform=${platform} arch=${arch} ffmpeg=${FFMPEG_COMMIT} x264=${X264_COMMIT}"
-  archive="aiscan-record-native-${RECORD_NATIVE_VERSION}-${platform}-${arch}.tar.gz"
+  source_stamp="family=${RECORD_FAMILY} version=${RECORD_NATIVE_VERSION} stage=source ffmpeg=${FFMPEG_COMMIT} x264=${X264_COMMIT}"
+  bundle_stamp="family=${RECORD_FAMILY} version=${RECORD_NATIVE_VERSION} platform=${platform}_${arch} ffmpeg=${FFMPEG_COMMIT} x264=${X264_COMMIT}"
+  archive="native-${RECORD_FAMILY}-${RECORD_NATIVE_VERSION}-${platform}_${arch}.tar.gz"
   max_bytes="${CYBER_RECORD_MAX_LIB_BYTES:-16777216}"
   if [[ ! -f "${prefix}/.versions" ]] || [[ "$(cat "${prefix}/.versions")" != "${source_stamp}" ]]; then
     echo "native dependencies at ${prefix} do not match versions.env" >&2
@@ -337,8 +337,8 @@ package_sdk() {
 
   printf '%s' "${bundle_stamp}" > "${stage}/.versions"
   cat > "${stage}/README.txt" << EOF
-aiscan recorder native SDK ${RECORD_NATIVE_VERSION}
-Target: ${platform}/${arch}
+native ${RECORD_FAMILY} SDK ${RECORD_NATIVE_VERSION}
+Target: ${platform}_${arch}
 FFmpeg: ${FFMPEG_TAG} (${FFMPEG_COMMIT})
 x264: ${X264_COMMIT}
 

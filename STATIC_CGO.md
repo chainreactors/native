@@ -11,7 +11,7 @@ into a single `.a` file, and the `#cgo LDFLAGS` directive statically links the
 C++ runtime as well.
 
 The archive is **not** committed to this repository. It is built and published
-as a release asset (`native-re2-static-<RE2_VERSION>-<platform>.tar.gz`), and
+as a release asset (`native-re2-<RE2_STATIC_VERSION>-<os>_<arch>.tar.gz`), and
 the consumer supplies the library search path:
 
 ```bash
@@ -60,7 +60,7 @@ triggers on changes to `cre2.cpp`, `cre2.h`, `cre2_re2_static*.go`, or
 `scripts/build-static*`. It builds each archive on a matching native CI runner
 (Ubuntu GCC, Apple Clang, or MSYS2 MinGW GCC), verifies it with
 `go test -tags "re2_cgo re2_static" ./...`, packages a per-platform archive
-with a SHA-256 sidecar, and publishes everything to the `re2-static-*` release
+with a SHA-256 sidecar, and publishes everything to the `native-re2-*` release
 in this repository using the workflow's own `GITHUB_TOKEN`. Nothing is
 committed back to the tree.
 

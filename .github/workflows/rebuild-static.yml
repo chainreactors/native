@@ -125,6 +125,6 @@ jobs:
           else
             gh release create "${RE2_STATIC_RELEASE}" dist/re2-static/*.tar.gz* \
               --repo "${GITHUB_REPOSITORY}" \
-              --title "native static RE2 SDK ${RE2_STATIC_VERSION}" \
+              --title "native ${RE2_FAMILY} SDK ${RE2_STATIC_VERSION}" \
               --notes "Prebuilt static libre2_cre2.a built from RE2 ${RE2_VERSION} for the \`re2_cgo re2_static\` backend. Link with CGO_LDFLAGS=-L<prefix>/lib."
           fi
