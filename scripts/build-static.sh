@@ -131,8 +131,17 @@ platform dependencies.
 EOF
 
 mkdir -p "$OUTPUT_ROOT"
-tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
-    -C "$PREFIX" -cf - . | gzip -n > "$OUTPUT_ROOT/${ARCHIVE}"
+# GNU tar's reproducibility flags do not exist in bsdtar, which is what macOS
+# ships. Use them where they are supported so that repeated builds of the same
+# source produce byte-identical archives, and fall back to a plain archive
+# otherwise: consumers verify the sha256 sidecar, not a pinned digest.
+TAR_VERSION="$(tar --version 2>/dev/null || true)"
+if printf '%s' "${TAR_VERSION}" | grep -qi 'gnu tar'; then
+    tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+        -C "$PREFIX" -cf - . | gzip -n > "$OUTPUT_ROOT/${ARCHIVE}"
+else
+    tar -C "$PREFIX" -cf - . | gzip -n > "$OUTPUT_ROOT/${ARCHIVE}"
+fi
 if command -v sha256sum >/dev/null 2>&1; then
     (cd "$OUTPUT_ROOT" && sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256")
 else
