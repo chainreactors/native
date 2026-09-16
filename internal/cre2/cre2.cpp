@@ -1,4 +1,4 @@
-//go:build re2_cgo
+//go:build re2_cgo && !re2_static
 
 /*
   Source  file	for  CRE2, a  C	 language  wrapper  for RE2:  a	 regular

@@ -115,6 +115,90 @@ re2 via brew:
 brew install re2
 ```
 
+### Static CGO (no runtime DLL dependencies)
+
+The `re2_static` build tag (used together with `re2_cgo`) links a pre-built
+RE2 + CRE2 static archive. Linux and Windows link the required GNU C++ runtime
+statically; macOS links the platform `libc++` runtime supplied by the OS.
+
+The archive is **not** part of this module. It ships as a release asset and
+must be installed into a prefix before building, which keeps large binaries out
+of the module tree and lets a single SDK serve every downstream project.
+
+#### Installing the SDK
+
+Download `native-re2-static-<RE2_VERSION>-<platform>.tar.gz` and its `.sha256`
+sidecar from the `re2-static-*` release in this repository, verify the
+checksum, and extract it. The archive contains `lib/libre2_cre2.a` and the
+upstream RE2 license.
+
+Then point CGO at the extracted prefix:
+
+```bash
+export CGO_LDFLAGS="-L<prefix>/lib"
+CGO_ENABLED=1 go build -tags "re2_cgo re2_static" -o myapp .
+```
+
+`CGO_LDFLAGS` is the only thing that supplies the library search path: the cgo
+directives in `internal/cre2` carry the remaining link flags and, unlike
+`${SRCDIR}`, cannot expand environment variables.
+
+#### Supported platforms
+
+| Platform | Asset suffix | Status |
+|----------|--------------|--------|
+| `linux/amd64` | `linux_amd64` | Stable |
+| `linux/arm64` | `linux_arm64` | Stable |
+| `darwin/amd64` | `darwin_amd64` | Stable |
+| `darwin/arm64` | `darwin_arm64` | Stable |
+| `windows/amd64` | `windows_amd64` | Stable |
+
+Archives are rebuilt by CI ([rebuild-static.yml](.github/workflows/rebuild-static.yml))
+on a native runner per platform whenever `cre2.cpp`, `cre2.h`, `cre2_re2_static*.go`,
+or the build script changes, then published to a versioned release.
+
+On Windows, the archive includes the build-time libstdc++ `std::call_once`
+implementation so it can be consumed across the MinGW GCC 15/16 ABI change.
+
+The bundled RE2 version is **2023-03-01** (the final release before RE2 added
+its Abseil dependency), keeping archives small and self-contained.
+
+#### CI testing
+
+Install the SDK for the runner's platform first, then export the search path:
+
+```yaml
+- run: echo "CGO_LDFLAGS=-L${PWD}/.cache/re2-static/lib" >> "$GITHUB_ENV"
+- run: go test -tags "re2_cgo re2_static" ./...
+```
+
+#### Consuming from downstream projects
+
+Add a `replace` directive pointing at this repository:
+
+```
+replace github.com/wasilibs/go-re2 => github.com/chainreactors/native <version>
+```
+
+Then install the SDK before building with `-tags "re2_cgo re2_static"`. No
+`libre2-dev`, `g++`, or `pkg-config` is needed — only the pre-built archive and
+`CGO_LDFLAGS`. Building without the SDK fails at link time with unresolved
+`cre2_*` symbols.
+
+#### Rebuilding archives
+
+Archives can be regenerated from source:
+
+```bash
+# Linux/macOS (native runner matching GOOS/GOARCH)
+./scripts/build-static.sh
+
+# Windows (MSYS2 MINGW64)
+bash scripts/build-static.sh
+# or
+pwsh scripts/build-static-windows.ps1
+```
+
 ## Performance
 
 Benchmarks are run against every commit in the [bench][4] workflow. GitHub action runners are highly

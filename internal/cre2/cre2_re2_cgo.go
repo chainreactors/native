@@ -1,4 +1,4 @@
-//go:build re2_cgo
+//go:build re2_cgo && !re2_static
 
 package cre2
 

@@ -1,0 +1,130 @@
+name: Rebuild static archives
+
+on:
+  push:
+    branches: [main, master, feat/static-cgo]
+    paths:
+      - 'internal/cre2/cre2.cpp'
+      - 'internal/cre2/cre2.h'
+      - 'internal/cre2/cre2_re2_static*.go'
+      - 'scripts/build-static*'
+      - '.github/workflows/rebuild-static.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux_amd64
+          - os: ubuntu-24.04-arm
+            platform: linux_arm64
+          - os: macos-15-intel
+            platform: darwin_amd64
+          - os: macos-15
+            platform: darwin_arm64
+          - os: windows-2022
+            platform: windows_amd64
+            shell: msys2
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.work
+
+      - name: Locate setup-go toolchain (Windows)
+        if: matrix.shell == 'msys2'
+        shell: pwsh
+        run: |
+          $goBin = Split-Path -Parent (Get-Command go).Source
+          Add-Content -Path $env:GITHUB_ENV -Value "SETUP_GO_BIN=$goBin"
+
+      - name: Setup MSYS2 (Windows)
+        if: matrix.shell == 'msys2'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          pacboy: gcc:p
+
+      - name: Build static archive (Unix)
+        if: matrix.shell != 'msys2'
+        run: ./scripts/build-static.sh ${{ matrix.platform }}
+
+      - name: Build static archive (Windows)
+        if: matrix.shell == 'msys2'
+        shell: msys2 {0}
+        run: bash scripts/build-static.sh ${{ matrix.platform }}
+
+      - name: Verify static backend (Unix)
+        if: matrix.shell != 'msys2'
+        run: |
+          go clean -cache
+          go test -tags "re2_cgo re2_static" ./...
+
+      - name: Verify static backend (Windows)
+        if: matrix.shell == 'msys2'
+        shell: msys2 {0}
+        env:
+          CC: gcc
+          CXX: g++
+          CGO_ENABLED: '1'
+        run: |
+          export PATH="$(cygpath -u "$SETUP_GO_BIN"):$PATH"
+          command -v go
+          go version
+          command -v gcc
+          gcc --version
+          command -v g++
+          g++ --version
+          go clean -cache
+          go test -tags "re2_cgo re2_static" ./...
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: static-${{ matrix.platform }}
+          path: internal/cre2/lib/${{ matrix.platform }}/
+
+  commit:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: static-*
+          path: internal/cre2/lib/
+          merge-multiple: false
+
+      - name: Move artifacts into place
+        run: |
+          for dir in internal/cre2/lib/static-*/; do
+            platform=$(basename "$dir" | sed 's/^static-//')
+            mkdir -p "internal/cre2/lib/$platform"
+            cp "$dir"/* "internal/cre2/lib/$platform/"
+            rm -rf "$dir"
+          done
+          ls -lhR internal/cre2/lib/
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add internal/cre2/lib/
+          if git diff --cached --quiet; then
+            echo "No changes to static archives"
+          else
+            git commit -m "build: rebuild static RE2 archives with latest toolchain"
+            git push
+          fi
