@@ -61,7 +61,7 @@ if (-not (Test-Path $re2Archive)) {
     throw "Static RE2 archive was not installed at $re2Archive"
 }
 
-$outputDir = Join-Path $cre2Dir "lib\windows_amd64"
+$outputDir = Join-Path $repoRoot "dist\re2-static\windows_amd64\lib"
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 $outputArchive = Join-Path $outputDir "libre2_cre2.a"
 $mriFile = Join-Path $bundleDir "bundle.mri"

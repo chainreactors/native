@@ -1,0 +1,99 @@
+name: recorder-native-sdk
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: recorder-native-sdk
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: linux-amd64
+            runner: ubuntu-22.04
+            platform: linux
+            arch: amd64
+          - id: linux-arm64
+            runner: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - id: windows-amd64
+            runner: windows-2022
+            platform: windows
+            arch: amd64
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: curioswitch/go-build/.github/actions/setup-go@a2e54f5c6b6cff10d3b5ac6fcba4de7a411c6736 # v0.8.1
+
+      - name: Install Linux source-build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential nasm yasm pkg-config \
+            libxcb1-dev libxcb-shm0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - name: Install Windows source-build dependencies
+        if: runner.os == 'Windows'
+        run: |
+          C:/msys64/usr/bin/bash.exe -lc \
+            "pacman -S --noconfirm --needed git diffutils make nasm yasm pkgconf mingw-w64-x86_64-toolchain"
+
+      - name: Build and package Linux SDK
+        if: runner.os == 'Linux'
+        run: make record-native-source record-native-package RECORD_ARCH='${{ matrix.arch }}'
+
+      - name: Build and package Windows SDK
+        if: runner.os == 'Windows'
+        run: |
+          C:/msys64/usr/bin/bash.exe -lc \
+            "cd '${GITHUB_WORKSPACE}'; make record-native-source record-native-package RECORD_ARCH=amd64"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: recorder-native-${{ matrix.id }}
+          path: dist/native/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: recorder-native-*
+          path: dist/native
+          merge-multiple: true
+
+      - name: Publish versioned SDK release
+        # The SDK is published from this repository, so the workflow's own token
+        # is enough; unlike a cross-repository publish no PAT is required.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          source .github/native/versions.env
+          ls -lh dist/native
+          if gh release view "${RECORD_NATIVE_RELEASE}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${RECORD_NATIVE_RELEASE}" dist/native/* \
+              --repo "${GITHUB_REPOSITORY}" --clobber
+          else
+            gh release create "${RECORD_NATIVE_RELEASE}" dist/native/* \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "aiscan recorder native SDK ${RECORD_NATIVE_VERSION}" \
+              --notes "Prebuilt static FFmpeg ${FFMPEG_TAG} and x264 ${X264_COMMIT} SDKs for optional aiscan record tool builds."
+          fi

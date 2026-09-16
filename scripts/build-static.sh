@@ -1,16 +1,26 @@
 #!/bin/bash
-# Build RE2 + CRE2 as a single static archive for the current native platform.
+# Build RE2 + CRE2 as a single static archive, then package it as a
+# relocatable SDK archive for the current native platform.
 #
 # Usage:
 #   ./scripts/build-static.sh [PLATFORM]
 #
-# Requires: g++/clang++ (or CXX), ar, curl
+# Requires: g++/clang++ (or CXX), ar, curl, tar, sha256sum
 
 set -euo pipefail
 
-RE2_VERSION="${RE2_VERSION:-2023-03-01}"
-
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# RE2_VERSION and RE2_STATIC_VERSION live with the rest of the native SDK
+# coordinates so the packaged asset name and the workflow release tag agree.
+if [ -f "$REPO_ROOT/.github/native/versions.env" ]; then
+    # shellcheck source=/dev/null
+    . "$REPO_ROOT/.github/native/versions.env"
+fi
+
+RE2_VERSION="${RE2_VERSION:-2023-03-01}"
+RE2_STATIC_VERSION="${RE2_STATIC_VERSION:-${RE2_VERSION}-1}"
+
 CRE2_DIR="$REPO_ROOT/internal/cre2"
 
 case "$(uname -s)-$(uname -m)" in
@@ -23,8 +33,9 @@ case "$(uname -s)-$(uname -m)" in
 esac
 
 PLATFORM="${1:-$HOST_PLATFORM}"
-OUTPUT_ROOT="${OUTPUT_ROOT:-$CRE2_DIR/lib}"
-OUTPUT_DIR="$OUTPUT_ROOT/$PLATFORM"
+OUTPUT_ROOT="${OUTPUT_ROOT:-$REPO_ROOT/dist/re2-static}"
+PREFIX="$OUTPUT_ROOT/$PLATFORM"
+ARCHIVE="native-re2-static-${RE2_STATIC_VERSION}-${PLATFORM}.tar.gz"
 
 if [ "$HOST_PLATFORM" = "unknown" ]; then
     echo "unsupported build host: $(uname -s)/$(uname -m)" >&2
@@ -43,10 +54,11 @@ esac
 CXX="${CXX:-$DEFAULT_CXX}"
 AR="${AR:-ar}"
 
-echo "Building RE2 $RE2_VERSION static archive for $PLATFORM"
+echo "Building RE2 $RE2_VERSION static SDK $RE2_STATIC_VERSION for $PLATFORM"
 echo "  host=$HOST_PLATFORM"
 echo "  CXX=$CXX"
 echo "  AR=$AR"
+echo "  prefix=$PREFIX"
 
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
@@ -93,16 +105,40 @@ if [ "$PLATFORM" = "linux_amd64" ] || [ "$PLATFORM" = "linux_arm64" ]; then
     ${CC:-gcc} -O2 -fPIC -c "$CRE2_DIR/isoc23_compat_linux.c" -o "$TMPDIR/build/isoc23_compat.o"
 fi
 
-mkdir -p "$OUTPUT_DIR"
-rm -f "$OUTPUT_DIR/libre2_cre2.a"
-$AR rcs "$OUTPUT_DIR/libre2_cre2.a" "$TMPDIR"/build/*.o
+rm -rf "$PREFIX"
+mkdir -p "$PREFIX/lib" "$PREFIX/share/licenses/re2"
+"$AR" rcs "$PREFIX/lib/libre2_cre2.a" "$TMPDIR"/build/*.o
 
-cp "$RE2_SRC/LICENSE" "$OUTPUT_DIR/RE2_LICENSE"
+cp "$RE2_SRC/LICENSE" "$PREFIX/share/licenses/re2/LICENSE"
 
 if [ "$PLATFORM" = "windows_amd64" ]; then
     CXX_PREFIX="$(dirname "$(dirname "$(command -v "$CXX")")")"
-    cp "$CXX_PREFIX/share/licenses/gcc-libs/COPYING3" "$OUTPUT_DIR/GCC_COPYING3"
-    cp "$CXX_PREFIX/share/licenses/gcc-libs/COPYING.RUNTIME" "$OUTPUT_DIR/GCC_COPYING.RUNTIME"
+    mkdir -p "$PREFIX/share/licenses/gcc"
+    cp "$CXX_PREFIX/share/licenses/gcc-libs/COPYING3" "$PREFIX/share/licenses/gcc/COPYING3"
+    cp "$CXX_PREFIX/share/licenses/gcc-libs/COPYING.RUNTIME" "$PREFIX/share/licenses/gcc/COPYING.RUNTIME"
 fi
 
-echo "Built: $OUTPUT_DIR/libre2_cre2.a ($(du -h "$OUTPUT_DIR/libre2_cre2.a" | cut -f1))"
+printf '%s' "bundle=${RE2_STATIC_VERSION} platform=${PLATFORM} re2=${RE2_VERSION}" > "$PREFIX/.versions"
+cat > "$PREFIX/README.txt" <<EOF
+native static RE2 SDK ${RE2_STATIC_VERSION}
+Target: ${PLATFORM}
+RE2: ${RE2_VERSION} (final release before the Abseil dependency)
+
+This bundle contains libre2_cre2.a, a static archive combining RE2 and the CRE2
+C wrapper. Link consumers with CGO_LDFLAGS=-L<prefix>/lib and the
+"re2_cgo re2_static" build tags. OS system libraries remain external
+platform dependencies.
+EOF
+
+mkdir -p "$OUTPUT_ROOT"
+tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+    -C "$PREFIX" -cf - . | gzip -n > "$OUTPUT_ROOT/${ARCHIVE}"
+if command -v sha256sum >/dev/null 2>&1; then
+    (cd "$OUTPUT_ROOT" && sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256")
+else
+    digest="$(shasum -a 256 "$OUTPUT_ROOT/${ARCHIVE}" | awk '{print $1}')"
+    printf '%s  %s\n' "${digest}" "${ARCHIVE}" > "$OUTPUT_ROOT/${ARCHIVE}.sha256"
+fi
+
+echo "Built: $PREFIX/lib/libre2_cre2.a ($(du -h "$PREFIX/lib/libre2_cre2.a" | cut -f1))"
+echo "Packaged: $OUTPUT_ROOT/${ARCHIVE}"

@@ -2,17 +2,22 @@ name: Rebuild static archives
 
 on:
   push:
-    branches: [main, master, feat/static-cgo]
+    branches: [main]
     paths:
       - 'internal/cre2/cre2.cpp'
       - 'internal/cre2/cre2.h'
       - 'internal/cre2/cre2_re2_static*.go'
       - 'scripts/build-static*'
+      - '.github/native/versions.env'
       - '.github/workflows/rebuild-static.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: rebuild-static
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -28,103 +33,98 @@ jobs:
             platform: darwin_amd64
           - os: macos-15
             platform: darwin_arm64
-          - os: windows-2022
+          - os: windows-2025
             platform: windows_amd64
-            shell: msys2
+            msys2: true
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.work
-
-      - name: Locate setup-go toolchain (Windows)
-        if: matrix.shell == 'msys2'
-        shell: pwsh
-        run: |
-          $goBin = Split-Path -Parent (Get-Command go).Source
-          Add-Content -Path $env:GITHUB_ENV -Value "SETUP_GO_BIN=$goBin"
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: curioswitch/go-build/.github/actions/setup-go@a2e54f5c6b6cff10d3b5ac6fcba4de7a411c6736 # v0.8.1
 
       - name: Setup MSYS2 (Windows)
-        if: matrix.shell == 'msys2'
-        uses: msys2/setup-msys2@v2
+        if: matrix.msys2
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
         with:
           msystem: MINGW64
           update: true
           pacboy: gcc:p
 
-      - name: Build static archive (Unix)
-        if: matrix.shell != 'msys2'
+      - name: Locate setup-go toolchain (Windows)
+        if: matrix.msys2
+        shell: pwsh
+        run: |
+          $goBin = Split-Path -Parent (Get-Command go).Source
+          Add-Content -Path $env:GITHUB_ENV -Value "SETUP_GO_BIN=$goBin"
+
+      - name: Build and package SDK (Unix)
+        if: ${{ !matrix.msys2 }}
         run: ./scripts/build-static.sh ${{ matrix.platform }}
 
-      - name: Build static archive (Windows)
-        if: matrix.shell == 'msys2'
+      - name: Build and package SDK (Windows)
+        if: matrix.msys2
         shell: msys2 {0}
         run: bash scripts/build-static.sh ${{ matrix.platform }}
 
       - name: Verify static backend (Unix)
-        if: matrix.shell != 'msys2'
+        if: ${{ !matrix.msys2 }}
         run: |
+          set -euo pipefail
           go clean -cache
+          export CGO_LDFLAGS="-L${PWD}/dist/re2-static/${{ matrix.platform }}/lib"
           go test -tags "re2_cgo re2_static" ./...
 
       - name: Verify static backend (Windows)
-        if: matrix.shell == 'msys2'
+        if: matrix.msys2
         shell: msys2 {0}
         env:
           CC: gcc
           CXX: g++
           CGO_ENABLED: '1'
         run: |
+          set -euo pipefail
           export PATH="$(cygpath -u "$SETUP_GO_BIN"):$PATH"
           command -v go
           go version
-          command -v gcc
-          gcc --version
           command -v g++
           g++ --version
           go clean -cache
+          export CGO_LDFLAGS="-L$(cygpath -m "$PWD")/dist/re2-static/${{ matrix.platform }}/lib"
           go test -tags "re2_cgo re2_static" ./...
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: static-${{ matrix.platform }}
-          path: internal/cre2/lib/${{ matrix.platform }}/
+          name: re2-static-${{ matrix.platform }}
+          path: dist/re2-static/*.tar.gz*
+          if-no-files-found: error
+          retention-days: 7
 
-  commit:
+  publish:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          pattern: re2-static-*
+          path: dist/re2-static
+          merge-multiple: true
 
-      - name: Download all archives
-        uses: actions/download-artifact@v4
-        with:
-          pattern: static-*
-          path: internal/cre2/lib/
-          merge-multiple: false
-
-      - name: Move artifacts into place
+      - name: Publish versioned static RE2 SDK release
+        # The SDK is published from this repository, so the workflow's own token
+        # is enough; unlike a cross-repository publish no PAT is required.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          for dir in internal/cre2/lib/static-*/; do
-            platform=$(basename "$dir" | sed 's/^static-//')
-            mkdir -p "internal/cre2/lib/$platform"
-            cp "$dir"/* "internal/cre2/lib/$platform/"
-            rm -rf "$dir"
-          done
-          ls -lhR internal/cre2/lib/
-
-      - name: Commit if changed
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add internal/cre2/lib/
-          if git diff --cached --quiet; then
-            echo "No changes to static archives"
+          set -euo pipefail
+          source .github/native/versions.env
+          ls -lh dist/re2-static
+          if gh release view "${RE2_STATIC_RELEASE}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${RE2_STATIC_RELEASE}" dist/re2-static/*.tar.gz* \
+              --repo "${GITHUB_REPOSITORY}" --clobber
           else
-            git commit -m "build: rebuild static RE2 archives with latest toolchain"
-            git push
+            gh release create "${RE2_STATIC_RELEASE}" dist/re2-static/*.tar.gz* \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "native static RE2 SDK ${RE2_STATIC_VERSION}" \
+              --notes "Prebuilt static libre2_cre2.a built from RE2 ${RE2_VERSION} for the \`re2_cgo re2_static\` backend. Link with CGO_LDFLAGS=-L<prefix>/lib."
           fi
