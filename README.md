@@ -176,7 +176,7 @@ Install the SDK for the runner's platform first, then export the search path:
 
 Add a `replace` directive pointing at this repository:
 
-```
+```text
 replace github.com/wasilibs/go-re2 => github.com/chainreactors/native <version>
 ```
 

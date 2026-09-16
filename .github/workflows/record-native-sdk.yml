@@ -39,14 +39,14 @@ jobs:
 
       - name: Install Linux source-build dependencies
         if: runner.os == 'Linux'
-        run: |
+        run: |-
           sudo apt-get update
           sudo apt-get install -y build-essential nasm yasm pkg-config \
             libxcb1-dev libxcb-shm0-dev libxcb-shape0-dev libxcb-xfixes0-dev
 
       - name: Install Windows source-build dependencies
         if: runner.os == 'Windows'
-        run: |
+        run: |-
           C:/msys64/usr/bin/bash.exe -lc \
             "pacman -S --noconfirm --needed git diffutils make nasm yasm pkgconf mingw-w64-x86_64-toolchain"
 
@@ -56,7 +56,7 @@ jobs:
 
       - name: Build and package Windows SDK
         if: runner.os == 'Windows'
-        run: |
+        run: |-
           C:/msys64/usr/bin/bash.exe -lc \
             "cd '${GITHUB_WORKSPACE}'; make record-native-source record-native-package RECORD_ARCH=amd64"
 
@@ -84,7 +84,7 @@ jobs:
         # is enough; unlike a cross-repository publish no PAT is required.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
+        run: |-
           set -euo pipefail
           source .github/native/versions.env
           ls -lh dist/native

@@ -68,11 +68,11 @@ than 16 MiB by default.
 
 Environment overrides:
 
-- `CYBER_RECORD_PREFIX`: SDK install/cache directory.
-- `CYBER_RECORD_NATIVE_URL`: release or mirror base URL containing the archive and `.sha256` sidecar.
-- `CYBER_RECORD_OFFLINE=1`: forbid downloads and require an already cached matching SDK.
-- `CYBER_RECORD_SOURCE`: pinned source checkout directory.
-- `CYBER_RECORD_MAX_LIB_BYTES`: static-library size budget (default 16 MiB).
+*   `CYBER_RECORD_PREFIX`: SDK install/cache directory.
+*   `CYBER_RECORD_NATIVE_URL`: release or mirror base URL containing the archive and `.sha256` sidecar.
+*   `CYBER_RECORD_OFFLINE=1`: forbid downloads and require an already cached matching SDK.
+*   `CYBER_RECORD_SOURCE`: pinned source checkout directory.
+*   `CYBER_RECORD_MAX_LIB_BYTES`: static-library size budget (default 16 MiB).
 
 ## macOS CGO cross-build
 

@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - 'internal/cre2/cre2.cpp'
-      - 'internal/cre2/cre2.h'
-      - 'internal/cre2/cre2_re2_static*.go'
-      - 'scripts/build-static*'
-      - '.github/native/versions.env'
-      - '.github/workflows/rebuild-static.yml'
+      - internal/cre2/cre2.cpp
+      - internal/cre2/cre2.h
+      - internal/cre2/cre2_re2_static*.go
+      - scripts/build-static*
+      - .github/native/versions.env
+      - .github/workflows/rebuild-static.yml
   workflow_dispatch:
 
 permissions:
@@ -52,7 +52,7 @@ jobs:
       - name: Locate setup-go toolchain (Windows)
         if: matrix.msys2
         shell: pwsh
-        run: |
+        run: |-
           $goBin = Split-Path -Parent (Get-Command go).Source
           Add-Content -Path $env:GITHUB_ENV -Value "SETUP_GO_BIN=$goBin"
 
@@ -67,7 +67,7 @@ jobs:
 
       - name: Verify static backend (Unix)
         if: ${{ !matrix.msys2 }}
-        run: |
+        run: |-
           set -euo pipefail
           go clean -cache
           export CGO_LDFLAGS="-L${PWD}/dist/re2-static/${{ matrix.platform }}/lib"
@@ -79,8 +79,8 @@ jobs:
         env:
           CC: gcc
           CXX: g++
-          CGO_ENABLED: '1'
-        run: |
+          CGO_ENABLED: "1"
+        run: |-
           set -euo pipefail
           export PATH="$(cygpath -u "$SETUP_GO_BIN"):$PATH"
           command -v go
@@ -115,7 +115,7 @@ jobs:
         # is enough; unlike a cross-repository publish no PAT is required.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
+        run: |-
           set -euo pipefail
           source .github/native/versions.env
           ls -lh dist/re2-static

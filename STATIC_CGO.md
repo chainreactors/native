@@ -33,7 +33,7 @@ module.
 
 ### Platform files
 
-```
+```text
 internal/cre2/
 ├── cre2_re2_cgo.go                 # re2_cgo && !re2_static → pkg-config
 ├── cre2_re2_static.go              # re2_cgo && re2_static && windows/amd64
@@ -69,8 +69,8 @@ ABI-compatible with Linux/Windows consumers that link libstdc++.
 
 ### Adding a new platform
 
-1. Add the platform to the CI matrix in `rebuild-static.yml` with a matching
-   native runner
-2. Create `internal/cre2/cre2_re2_static_<os>_<arch>.go` with the appropriate
-   build constraint and `#cgo LDFLAGS` for the extra link flags that platform
-   needs (the `-L` comes from the consumer's `CGO_LDFLAGS`)
+1.  Add the platform to the CI matrix in `rebuild-static.yml` with a matching
+    native runner
+2.  Create `internal/cre2/cre2_re2_static_<os>_<arch>.go` with the appropriate
+    build constraint and `#cgo LDFLAGS` for the extra link flags that platform
+    needs (the `-L` comes from the consumer's `CGO_LDFLAGS`)

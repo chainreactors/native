@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${ROOT}/.github/native/versions.env"
 
 usage() {
-  cat >&2 <<'EOF'
+  cat >&2 << 'EOF'
 usage: record.sh fetch [linux|windows] [amd64|arm64]
        record.sh build [linux|windows] [amd64|arm64]
        record.sh package [linux|windows] [amd64|arm64] [output-dir]
@@ -19,7 +19,7 @@ EOF
 detect_platform() {
   case "$(uname -s)" in
     Linux*) echo linux ;;
-    MINGW*|MSYS*|CYGWIN*) echo windows ;;
+    MINGW* | MSYS* | CYGWIN*) echo windows ;;
     *) echo unsupported ;;
   esac
 }
@@ -27,12 +27,12 @@ detect_platform() {
 detect_arch() {
   if [[ -n "${GOARCH:-}" ]]; then
     echo "${GOARCH}"
-  elif command -v go >/dev/null 2>&1; then
+  elif command -v go > /dev/null 2>&1; then
     go env GOARCH
   else
     case "$(uname -m)" in
-      x86_64|amd64) echo amd64 ;;
-      aarch64|arm64) echo arm64 ;;
+      x86_64 | amd64) echo amd64 ;;
+      aarch64 | arm64) echo arm64 ;;
       *) echo unsupported ;;
     esac
   fi
@@ -40,8 +40,11 @@ detect_arch() {
 
 validate_target() {
   case "$1/$2" in
-    linux/amd64|linux/arm64|windows/amd64) ;;
-    *) echo "unsupported recorder SDK target $1/$2" >&2; exit 1 ;;
+    linux/amd64 | linux/arm64 | windows/amd64) ;;
+    *)
+      echo "unsupported recorder SDK target $1/$2" >&2
+      exit 1
+      ;;
   esac
 }
 
@@ -54,7 +57,7 @@ configure_link_env() {
   local platform="$1" arch="$2" prefix root_native
   prefix="$(native_prefix "${platform}" "${arch}")"
   root_native="${ROOT}"
-  if [[ "${platform}" == windows ]] && command -v cygpath >/dev/null 2>&1; then
+  if [[ "${platform}" == windows ]] && command -v cygpath > /dev/null 2>&1; then
     prefix="$(cygpath -m "${prefix}")"
     root_native="$(cygpath -m "${root_native}")"
   fi
@@ -86,7 +89,7 @@ checkout_source() {
   else
     git -C "${directory}" remote set-url origin "${repository}"
   fi
-  if ! git -C "${directory}" cat-file -e "${commit}^{commit}" 2>/dev/null; then
+  if ! git -C "${directory}" cat-file -e "${commit}^{commit}" 2> /dev/null; then
     git -C "${directory}" fetch --depth 1 origin "${commit}"
   fi
   git -C "${directory}" checkout --detach "${commit}"
@@ -112,7 +115,10 @@ expect_components() {
 
 verify_ffmpeg() {
   local platform="$1" config="$2"
-  [[ -f "${config}" ]] || { echo "FFmpeg component config not found: ${config}" >&2; exit 1; }
+  [[ -f "${config}" ]] || {
+    echo "FFmpeg component config not found: ${config}" >&2
+    exit 1
+  }
   if [[ "${platform}" == windows ]]; then
     expect_components "${config}" DECODER BMP
     expect_components "${config}" INDEV GDIGRAB
@@ -148,10 +154,16 @@ fetch_sdk() {
     exit 1
   fi
   for command_name in curl tar; do
-    command -v "${command_name}" >/dev/null 2>&1 || { echo "${command_name} is required to download the recorder SDK" >&2; exit 1; }
+    command -v "${command_name}" > /dev/null 2>&1 || {
+      echo "${command_name} is required to download the recorder SDK" >&2
+      exit 1
+    }
   done
   case "${prefix}" in
-    ""|/|"${HOME:-__missing__}"|"${ROOT}") echo "refusing unsafe recorder SDK prefix: ${prefix}" >&2; exit 1 ;;
+    "" | / | "${HOME:-__missing__}" | "${ROOT}")
+      echo "refusing unsafe recorder SDK prefix: ${prefix}" >&2
+      exit 1
+      ;;
   esac
 
   local tmp stage backup cleanup_cmd
@@ -166,9 +178,9 @@ fetch_sdk() {
     --retry 5 --retry-delay 2 --retry-all-errors "${base_url}/${archive}" -o "${tmp}/${archive}"
   curl --fail --location --connect-timeout 20 --speed-time 30 --speed-limit 1024 \
     --retry 5 --retry-delay 2 --retry-all-errors "${base_url}/${archive}.sha256" -o "${tmp}/${archive}.sha256"
-  if command -v sha256sum >/dev/null 2>&1; then
+  if command -v sha256sum > /dev/null 2>&1; then
     (cd "${tmp}" && sha256sum --check "${archive}.sha256")
-  elif command -v shasum >/dev/null 2>&1; then
+  elif command -v shasum > /dev/null 2>&1; then
     (cd "${tmp}" && shasum -a 256 --check "${archive}.sha256")
   else
     echo "sha256sum or shasum is required to verify the recorder SDK" >&2
@@ -184,9 +196,15 @@ fetch_sdk() {
     exit 1
   fi
   for library in avcodec avdevice avfilter avformat avutil swresample swscale x264; do
-    [[ -f "${stage}/lib/lib${library}.a" ]] || { echo "recorder SDK archive is missing lib${library}.a" >&2; exit 1; }
+    [[ -f "${stage}/lib/lib${library}.a" ]] || {
+      echo "recorder SDK archive is missing lib${library}.a" >&2
+      exit 1
+    }
   done
-  [[ -d "${stage}/include/libavcodec" ]] || { echo "recorder SDK archive is missing FFmpeg headers" >&2; exit 1; }
+  [[ -d "${stage}/include/libavcodec" ]] || {
+    echo "recorder SDK archive is missing FFmpeg headers" >&2
+    exit 1
+  }
 
   [[ ! -e "${prefix}" ]] || mv "${prefix}" "${backup}"
   if ! mv "${stage}" "${prefix}"; then
@@ -222,7 +240,10 @@ build_sdk() {
   if [[ "${platform}" == windows ]]; then
     export MSYSTEM=MINGW64
     export PATH="/mingw64/bin:/usr/bin:${PATH}"
-    gcc -dumpmachine | grep -q 'mingw32$' || { echo "a MinGW-w64 GCC toolchain is required" >&2; exit 1; }
+    gcc -dumpmachine | grep -q 'mingw32$' || {
+      echo "a MinGW-w64 GCC toolchain is required" >&2
+      exit 1
+    }
     x264_platform_args=(--host=x86_64-w64-mingw32)
     ffmpeg_platform_args=(--enable-indev=gdigrab)
   else
@@ -237,7 +258,7 @@ build_sdk() {
   checkout_source "${source_root}/x264" "${X264_REPOSITORY}" "${X264_COMMIT}"
   (
     cd "${source_root}/x264"
-    make distclean >/dev/null 2>&1 || true
+    make distclean > /dev/null 2>&1 || true
     ./configure \
       --prefix="${prefix}" \
       --enable-static --disable-cli \
@@ -251,7 +272,7 @@ build_sdk() {
   checkout_source "${source_root}/ffmpeg" "${FFMPEG_REPOSITORY}" "${FFMPEG_COMMIT}"
   (
     cd "${source_root}/ffmpeg"
-    make distclean >/dev/null 2>&1 || true
+    make distclean > /dev/null 2>&1 || true
     PKG_CONFIG_PATH="${prefix}/lib/pkgconfig" ./configure \
       --prefix="${prefix}" \
       --disable-shared --enable-static \
@@ -290,7 +311,7 @@ package_sdk() {
     bytes="$(wc -c < "${library}")"
     static_bytes=$((static_bytes + bytes))
   done < <(find "${prefix}/lib" -maxdepth 1 -type f -name '*.a' -print0)
-  if (( static_bytes > max_bytes )); then
+  if ((static_bytes > max_bytes)); then
     echo "recorder static libraries are ${static_bytes} bytes; budget is ${max_bytes}" >&2
     echo "the FFmpeg component allowlist may have regressed" >&2
     exit 1
@@ -315,7 +336,7 @@ package_sdk() {
   fi
 
   printf '%s' "${bundle_stamp}" > "${stage}/.versions"
-  cat > "${stage}/README.txt" <<EOF
+  cat > "${stage}/README.txt" << EOF
 aiscan recorder native SDK ${RECORD_NATIVE_VERSION}
 Target: ${platform}/${arch}
 FFmpeg: ${FFMPEG_TAG} (${FFMPEG_COMMIT})
@@ -328,7 +349,7 @@ Static library bytes: ${static_bytes}
 EOF
   tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
     -C "${stage}" -cf - . | gzip -n > "${output_dir}/${archive}"
-  if command -v sha256sum >/dev/null 2>&1; then
+  if command -v sha256sum > /dev/null 2>&1; then
     (cd "${output_dir}" && sha256sum "${archive}" > "${archive}.sha256")
   else
     local digest
@@ -342,14 +363,17 @@ EOF
 
 command_name="${1:-}"
 case "${command_name}" in
-  fetch|build|env)
+  fetch | build | env)
     platform="${2:-$(detect_platform)}"
     arch="${3:-$(detect_arch)}"
     validate_target "${platform}" "${arch}"
     case "${command_name}" in
       fetch) fetch_sdk "${platform}" "${arch}" ;;
       build) build_sdk "${platform}" "${arch}" ;;
-      env) configure_link_env "${platform}" "${arch}"; emit_link_env ;;
+      env)
+        configure_link_env "${platform}" "${arch}"
+        emit_link_env
+        ;;
     esac
     ;;
   package)
